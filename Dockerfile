@@ -2,27 +2,37 @@
 FROM node:18-alpine AS builder
 WORKDIR /app
 
-# Ensure devDependencies are installed during the build (Vite plugins are dev deps).
+# Ensure NODE_ENV development so devDependencies (vite plugins) are installed
 ENV NODE_ENV=development
 
-# Copy package manifests first to use Docker layer cache efficiently
+# Install system packages needed for native builds and git (if any dependency uses git)
+# We install bash too to ease debugging
+RUN apk add --no-cache python3 make g++ git bash
+
+# Copy package manifests first to leverage docker cache
 COPY package.json package-lock.json* ./
 
-# Install dependencies (including devDependencies)
-RUN npm ci --silent
+# Try clean install with npm ci; if it fails, fallback to npm install.
+# We show verbose logs if failures happen.
+RUN set -eux; \
+    if npm ci --silent; then \
+      echo "npm ci succeeded"; \
+    else \
+      echo "npm ci failed — falling back to npm install (verbose)"; \
+      npm install --verbose; \
+    fi
 
-# Copy application source
+# Copy source files
 COPY . .
 
 # Build the app (produces /app/dist)
 RUN npm run build
 
-# Production stage: serve the built files using nginx
-FROM nginx:stable-alpine
-# remove default nginx index if present and copy our build
-RUN rm -f /usr/share/nginx/html/* || true
+# Production stage: use nginx to serve the build
+FROM nginx:stable-alpine AS runtime
+# remove default nginx html pages (safety)
+RUN rm -rf /usr/share/nginx/html/*
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Expose port 80 and start nginx
 EXPOSE 80
 CMD ["/usr/sbin/nginx", "-g", "daemon off;"]

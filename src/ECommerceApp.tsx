@@ -2,11 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { ShoppingCart, Search, ChevronLeft, Info, X } from 'lucide-react';
 
-/* Final updated ECommerceApp.tsx
-   - Ribbon discount badge
-   - Combo tag moved to bottom (above Add to Cart)
-   - Checkout rows now show: ItemName: ₹<unit price after discounts> × <quantity>
-   - WhatsApp message includes unit price, quantity and line total
+/**
+ Updates:
+ - Checkout opens as a full-page instead of modal (with Back and Close buttons)
+ - Checkbox is placed at the top of the checkout text
+ - Button text changed to "Send Order via WhatsApp"
+ - Cart becomes a responsive drawer on mobile (full screen) to avoid invisibility
+ - Searchbar responsive: full width on mobile, constrained on desktop
+ - Green notification z-index increased so it's visible
 */
 
 const kfcMock = {
@@ -40,7 +43,7 @@ export default function ECommerceApp() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [cart, setCart] = useState<any[]>([]);
   const [showCart, setShowCart] = useState(false);
-  const [showCheckoutDialog, setShowCheckoutDialog] = useState(false);
+  const [showCheckoutPage, setShowCheckoutPage] = useState(false);
   const [consentChecked, setConsentChecked] = useState(false);
   const [showShopInfoModal, setShowShopInfoModal] = useState(false);
   const [showCartNotification, setShowCartNotification] = useState(false);
@@ -69,7 +72,7 @@ export default function ECommerceApp() {
     if(ex) setCart(cart.map(c=> c.id===product.id ? {...c, quantity:c.quantity+1} : c));
     else setCart([...cart, {...product, quantity:1}]);
     setShowCartNotification(true);
-    setTimeout(()=> setShowCartNotification(false), 1200);
+    setTimeout(()=> setShowCartNotification(false), 1400);
   }
 
   function updateQuantity(id:number, delta:number){
@@ -80,7 +83,9 @@ export default function ECommerceApp() {
   const cartItemCount = cart.reduce((s,c)=> s + (c.quantity||0), 0);
   const cartTotal = cart.reduce((t,c)=> t + applyDiscountsPerUnit(c, c.quantity||1) * (c.quantity||1), 0);
 
-  function handleCheckout(){ setShowCheckoutDialog(true); setConsentChecked(false); }
+  function openCheckoutPage(){
+    setShowCheckoutPage(true);
+  }
 
   function handleWhatsAppOrder(){
     if(!consentChecked) return;
@@ -95,22 +100,38 @@ export default function ECommerceApp() {
     msg += `\nConvenience: ₹${shopData.ConvenienceFee.toFixed(2)}`;
     msg += `\nTotal: ₹${(cartTotal + shopData.ConvenienceFee).toFixed(2)}`;
     window.open(`https://wa.me/${shopData.MobileNo.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`, '_blank');
-    setShowCheckoutDialog(false);
+    setShowCheckoutPage(false);
+    setConsentChecked(false);
   }
 
   const filtered = shopData.Items.filter((p:any)=> (selectedCategory==='All' || p.Category===selectedCategory) && p.Name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
-      {showCartNotification && <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded">Added</div>}
+      {/* notification - higher z-index so it's always visible */}
+      {showCartNotification && <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded z-50 shadow-lg">Added to cart</div>}
 
-      <header className="bg-gradient-to-r from-blue-600 to-blue-400 p-4 text-white flex items-center justify-between">
-        <div><h1 className="text-2xl font-bold">{shopData.BusinessName}</h1></div>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search size={18} className="absolute left-3 top-3 text-white/80" />
-            <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search products..." className="pl-10 pr-4 py-2 rounded-lg text-black" />
+      {/* Header */}
+      <header className="bg-gradient-to-r from-blue-600 to-blue-400 p-4 text-white flex items-center gap-4">
+        <div className="text-2xl font-bold">{shopData.BusinessName}</div>
+
+        {/* responsive search: full width on mobile, limited on desktop */}
+        <div className="flex-1">
+          <div className="max-w-full md:max-w-lg mx-auto">
+            <div className="relative">
+              <Search size={18} className="absolute left-3 top-3 text-gray-400" />
+              <input
+                value={searchQuery}
+                onChange={e=>setSearchQuery(e.target.value)}
+                placeholder="Search products..."
+                className="w-full pl-10 pr-4 py-2 rounded-lg text-black"
+                style={{ minWidth: 0 }}
+              />
+            </div>
           </div>
+        </div>
+
+        <div className="flex items-center gap-4">
           <button onClick={()=>setShowCart(true)} className="relative">
             <ShoppingCart size={20} />
             {cartItemCount>0 && <span className="absolute -top-2 -right-2 bg-white text-blue-600 w-5 h-5 rounded-full flex items-center justify-center text-xs">{cartItemCount}</span>}
@@ -118,11 +139,13 @@ export default function ECommerceApp() {
         </div>
       </header>
 
+      {/* Categories */}
       <div className="p-4">
-        <div className="flex gap-3 mb-4">
+        <div className="flex gap-3 mb-4 overflow-x-auto">
           {categories.map(c=> <button key={c} onClick={()=>setSelectedCategory(c)} className={`px-3 py-1 rounded ${selectedCategory===c? 'bg-blue-600 text-white':'bg-gray-100'}`}>{c}</button>)}
         </div>
 
+        {/* Product grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {filtered.map((p:any)=>{
             const price = applyDiscountsPerUnit(p, 1);
@@ -164,14 +187,17 @@ export default function ECommerceApp() {
         </div>
       </div>
 
+      {/* Cart modal / drawer */}
       {showCart && (
-        <div className="fixed inset-0 z-40 bg-black bg-opacity-40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg w-full max-w-2xl p-4">
+        <div className="fixed inset-0 z-40 flex">
+          {/* overlay hidden on small screens to allow full-screen drawer */}
+          <div className="hidden md:block flex-1 bg-black bg-opacity-40" onClick={()=>setShowCart(false)} />
+          <div className="w-full md:w-96 bg-white shadow-lg p-4 overflow-auto h-full">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold">Cart</h2>
               <div className="flex items-center gap-2">
                 <button onClick={()=>setShowCart(false)} className="px-3 py-1 rounded bg-gray-100">Close</button>
-                <button onClick={handleCheckout} className="px-3 py-1 rounded bg-blue-600 text-white">Checkout</button>
+                <button onClick={openCheckoutPage} className="px-3 py-1 rounded bg-blue-600 text-white">Checkout</button>
               </div>
             </div>
 
@@ -185,9 +211,7 @@ export default function ECommerceApp() {
                   return (
                     <div key={c.id} className="flex justify-between items-center border rounded p-3">
                       <div>
-                        <div className="font-medium">
-                          {c.Name}: ₹{unit.toFixed(2)} × {c.quantity}
-                        </div>
+                        <div className="font-medium">{c.Name}: ₹{unit.toFixed(2)} × {c.quantity}</div>
                         {comboApplied && <div className="text-xs text-green-700 font-semibold">Combo applied: {c.combo_discount}%</div>}
                       </div>
                       <div className="text-right">
@@ -215,14 +239,17 @@ export default function ECommerceApp() {
                   <div>₹{(cartTotal + shopData.ConvenienceFee).toFixed(2)}</div>
                 </div>
 
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={consentChecked} onChange={e=>setConsentChecked(e.target.checked)} />
-                  <span>I understand that my order will be sent directly to the vendor via WhatsApp. Final prices may vary, and the order is considered confirmed only after the vendor acknowledges it by call or message.</span>
-                </label>
+                {/* Checkbox at top of the confirmation text area - updated per request */}
+                <div className="mt-2">
+                  <label className="flex items-center gap-2 mb-2">
+                    <input type="checkbox" checked={consentChecked} onChange={e=>setConsentChecked(e.target.checked)} />
+                    <span className="text-sm">I understand that my order will be sent directly to the vendor via WhatsApp. Final prices may vary and the order is considered confirmed only after vendor acknowledges it.</span>
+                  </label>
+                </div>
 
                 <div className="flex gap-2">
                   <button onClick={()=>setShowCart(false)} className="flex-1 py-2 rounded border">Cancel</button>
-                  <button onClick={handleWhatsAppOrder} className="flex-1 py-2 rounded bg-green-600 text-white" disabled={!consentChecked}>Send via WhatsApp</button>
+                  <button onClick={openCheckoutPage} className="flex-1 py-2 rounded bg-green-600 text-white" disabled={!consentChecked}>Send Order via WhatsApp</button>
                 </div>
               </div>
             )}
@@ -230,8 +257,71 @@ export default function ECommerceApp() {
         </div>
       )}
 
+      {/* Checkout as full page */}
+      {showCheckoutPage && (
+        <div className="fixed inset-0 z-50 bg-white overflow-auto p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <button onClick={()=>{ setShowCheckoutPage(false); setShowCart(true); }} className="px-3 py-1 rounded bg-gray-100">Back</button>
+              <h2 className="text-lg font-semibold">Checkout</h2>
+            </div>
+            <button onClick={()=>{ setShowCheckoutPage(false); setShowCart(false); }} className="px-3 py-1 rounded bg-gray-100">Close</button>
+          </div>
+
+          {cart.length===0 ? (
+            <div className="text-center text-gray-500">No items</div>
+          ) : (
+            <div className="max-w-3xl mx-auto space-y-4">
+              {/* Checkbox at top of text (per request) */}
+              <div className="p-4 bg-gray-50 rounded">
+                <label className="flex items-start gap-3">
+                  <input type="checkbox" checked={consentChecked} onChange={e=>setConsentChecked(e.target.checked)} className="mt-1" />
+                  <div>
+                    <p className="text-sm text-gray-700">I understand that my order will be sent directly to the vendor via WhatsApp. Final prices may vary and the order is considered confirmed only after vendor acknowledges it.</p>
+                  </div>
+                </label>
+              </div>
+
+              {cart.map(c=>{
+                const unit = applyDiscountsPerUnit(c, c.quantity||1);
+                const comboApplied = c.combo_quantity && c.quantity >= c.combo_quantity;
+                return (
+                  <div key={c.id} className="border rounded p-4 flex justify-between items-center">
+                    <div>
+                      <div className="font-medium">{c.Name}: ₹{unit.toFixed(2)} × {c.quantity}</div>
+                      {comboApplied && <div className="text-xs text-green-700 font-semibold mt-1">Combo applied: {c.combo_discount}%</div>}
+                    </div>
+                    <div className="text-right">
+                      <div className="font-semibold text-lg">₹{(unit * c.quantity).toFixed(2)}</div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div className="flex justify-between font-semibold">
+                <div>Subtotal</div>
+                <div>₹{cartTotal.toFixed(2)}</div>
+              </div>
+              <div className="flex justify-between">
+                <div>Convenience</div>
+                <div>₹{shopData.ConvenienceFee.toFixed(2)}</div>
+              </div>
+              <div className="flex justify-between font-bold">
+                <div>Total</div>
+                <div>₹{(cartTotal + shopData.ConvenienceFee).toFixed(2)}</div>
+              </div>
+
+              <div className="flex gap-2">
+                <button onClick={()=>{ setShowCheckoutPage(false); }} className="flex-1 py-2 rounded border">Back</button>
+                <button onClick={handleWhatsAppOrder} className="flex-1 py-2 rounded bg-green-600 text-white" disabled={!consentChecked}>Send Order via WhatsApp</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {showShopInfoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 p-4">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black bg-opacity-40 p-4">
           <div className="bg-white rounded-lg p-6 max-w-md w-full">
             <button className="absolute right-4 top-4" onClick={()=>setShowShopInfoModal(false)}><X /></button>
             <h3 className="text-lg font-semibold mb-2">{shopData.BusinessName}</h3>
@@ -241,7 +331,6 @@ export default function ECommerceApp() {
           </div>
         </div>
       )}
-
     </div>
   );
 }

@@ -52,7 +52,7 @@ export default function ECommerceApp() {
     const params = new URLSearchParams(window.location.search);
     const user = params.get('customer_name');
     if (user) {
-      fetch(`http://13.233.199.188:9000/getitems?shop_username=${encodeURIComponent(user)}`, { headers:{accept:'application/json'} })
+      fetch(`https://api.zentroxs.online/getitems?shop_username=${encodeURIComponent(user)}`, { headers:{accept:'application/json'} })
         .then(r=> r.ok ? r.json() : Promise.reject())
         .then(json=> setShopData(json))
         .catch(()=> setShopData(kfcMock));
